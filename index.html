@@ -67,6 +67,8 @@
     .card-meta { display: flex; align-items: center; justify-content: space-between; gap: 5px; color: var(--muted); font-size: 11px; }
     .tag { padding: 3px 7px; color: #3657d6; background: #eef0ff; border-radius: 5px; font-weight: 700; }
     .owner { display: flex; align-items: center; gap: 5px; } .owner .avatar { width: 23px; height: 23px; margin: 0; border: 0; font-size: 8px; }
+    .done-button { width: 100%; margin-top: 12px; padding: 8px 10px; color: var(--primary); background: #eef0ff; border: 1px solid #dfe4ff; border-radius: 7px; font-size: 12px; font-weight: 800; }
+    .done-button:hover { background: #e2e6ff; } .done-button.completed { color: #fff; background: var(--green); border-color: var(--green); }
     .empty { padding: 35px 10px; color: #8c97aa; font-size: 12px; text-align: center; }
     .modal-backdrop { position: fixed; inset: 0; display: none; place-items: center; padding: 18px; background: rgba(20,29,55,.55); z-index: 3; }
     .modal-backdrop.open { display: grid; } .modal { width: min(520px, 100%); padding: 24px; background: #fff; border-radius: 14px; box-shadow: 0 20px 60px rgba(10,20,50,.25); }
@@ -151,7 +153,7 @@
     ];
     const activityStorageKey = "habitos-vivabem-activities-v2";
     let activities = JSON.parse(localStorage.getItem(activityStorageKey) || "null") || initialActivities;
-    activities = activities.map(item => ({ ...item, owner: ownerAliases[item.owner] || item.owner }));
+    activities = activities.map(item => ({ ...item, owner: ownerAliases[item.owner] || item.owner, completed: item.completed ?? item.column === "done" }));
     save();
     let draggedId = null;
     const board = document.getElementById("board");
@@ -165,7 +167,7 @@
         return `<section class="column" data-column="${column.id}"><div class="column-head"><h3>${column.title}</h3><span class="count">${cards.length}</span></div><div class="cards">${cards.length ? cards.map(cardTemplate).join("") : '<div class="empty">Solte atividades aqui</div>'}</div></section>`;
       }).join("");
       document.getElementById("totalStat").textContent = activities.length;
-      document.getElementById("progressStat").textContent = Math.round((activities.filter(item => item.column === "done").length / Math.max(activities.length, 1)) * 100) + "%";
+      document.getElementById("progressStat").textContent = Math.round((activities.filter(item => item.completed).length / Math.max(activities.length, 1)) * 100) + "%";
       document.querySelectorAll(".card").forEach(card => {
         card.addEventListener("dragstart", () => { draggedId = Number(card.dataset.id); card.classList.add("dragging"); });
         card.addEventListener("dragend", () => card.classList.remove("dragging"));
@@ -174,10 +176,16 @@
         column.addEventListener("dragover", event => event.preventDefault());
         column.addEventListener("drop", () => { const activity = activities.find(item => item.id === draggedId); if (activity) { activity.column = column.dataset.column; save(); render(); } });
       });
+      document.querySelectorAll(".done-button").forEach(button => {
+        button.addEventListener("click", () => {
+          const activity = activities.find(item => item.id === Number(button.dataset.id));
+          if (activity) { activity.completed = !activity.completed; save(); render(); }
+        });
+      });
     }
     function cardTemplate(item) {
       const person = people[item.owner] || { initials: String(item.owner || "??").slice(0, 2).toUpperCase(), className: "a" };
-      return `<article class="card" draggable="true" data-id="${item.id}"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.description || "Sem descrição")}</p><div class="card-meta"><span class="tag">${formatDate(item.start)} – ${formatDate(item.end)}</span><span class="owner"><span class="avatar ${person.className}">${person.initials}</span>${item.owner.split(" ")[0]}</span></div></article>`;
+      return `<article class="card" draggable="true" data-id="${item.id}"><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.description || "Sem descrição")}</p><div class="card-meta"><span class="tag">${formatDate(item.start)} – ${formatDate(item.end)}</span><span class="owner"><span class="avatar ${person.className}">${person.initials}</span>${item.owner.split(" ")[0]}</span></div><button class="done-button ${item.completed ? "completed" : ""}" data-id="${item.id}" type="button">${item.completed ? "✓ Feito" : "Marcar como feito"}</button></article>`;
     }
     function escapeHtml(value) { return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
     const modal = document.getElementById("modalBackdrop");
@@ -187,7 +195,7 @@
     document.getElementById("activityForm").addEventListener("submit", event => {
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget));
-      activities.push({ ...data, id: Date.now() });
+      activities.push({ ...data, id: Date.now(), completed: false });
       save(); render(); event.currentTarget.reset(); modal.classList.remove("open");
     });
     document.getElementById("searchInput").addEventListener("input", render);
